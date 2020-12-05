@@ -2,6 +2,7 @@ from pathlib import Path
 from random import choice
 from markov import generate
 
+import requests
 import sys
 import re
 
@@ -96,6 +97,18 @@ def parse(buffer):
             replacement += get_word_from_bank(file="banks/bedrijven.txt", pattern=pattern)
         elif character == "g":
             replacement += get_word_from_bank(file="banks/genres.txt", pattern=pattern)
+        elif character == "i":
+            which = "lit"
+            if len(buffer) > 1 and buffer[1] == ":":
+                bits = buffer.split(":")
+                bits[1] = bits[1].replace("list", "")
+                if bits[1] in ("lit", "shit"):
+                    which = bits[1]
+            try:
+                replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/list?name=%s" % which, timeout=3).text
+            except (requests.RequestException, ConnectionRefusedError) as e:
+                replacement += "stijn" if which == "lit" else "poep"
+            break
         elif character == "a":
             replacement += get_word_from_bank(file="banks/bijvnw.txt", pattern=pattern)
         elif character == "s":

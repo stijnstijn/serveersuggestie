@@ -104,11 +104,18 @@ def parse(buffer):
                 bits[1] = bits[1].replace("list", "")
                 if bits[1] in ("lit", "shit"):
                     which = bits[1]
-            try:
-                replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/list?name=%s" % which, timeout=3).text
-            except (requests.RequestException, ConnectionRefusedError) as e:
-                replacement += "stijn" if which == "lit" else "poep"
-            break
+                    try:
+                        replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/list?name=%s" % which, timeout=3).text
+                    except (requests.RequestException, ConnectionRefusedError) as e:
+                        replacement += "stijn" if which == "lit" else "poep"
+                    break
+                elif bits[1] in ("speld", "surpator", "linus"):
+                    which = bits[1]
+                    try:
+                        replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/markov?name=%s" % which, timeout=3).text
+                    except (requests.RequestException, ConnectionRefusedError, requests.raise_for_status()) as e:
+                        replacement += "stijn wint markovcompetitie 2020 en nu krijgt hij elke week basilicumplantje dat direct sterft " if which == "speld" else "Actie tegen hondelulzonneklepwafelijzers in het OV"
+                    break
         elif character == "a":
             replacement += get_word_from_bank(file="banks/bijvnw.txt", pattern=pattern)
         elif character == "s":

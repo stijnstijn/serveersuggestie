@@ -113,7 +113,7 @@ def parse(buffer):
                     which = bits[1]
                     try:
                         replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/markov?name=%s" % which, timeout=5).text
-                    except (requests.RequestException, ConnectionRefusedError, requests.raise_for_status()) as e:
+                    except (requests.RequestException, ConnectionRefusedError) as e:
                         replacement += "stijn wint markovcompetitie 2020 en nu krijgt hij elke week basilicumplantje dat direct sterft " if which == "speld" else "Actie tegen hondelulzonneklepwafelijzers in het OV"
                     break
         elif character == "a":

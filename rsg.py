@@ -104,18 +104,12 @@ def parse(buffer):
                 bits[1] = bits[1].replace("list", "")
                 if bits[1] in ("lit", "shit"):
                     which = bits[1]
-                    try:
-                        replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/list?name=%s" % which, timeout=5).text
-                    except (requests.RequestException, ConnectionRefusedError) as e:
-                        replacement += "stijn" if which == "lit" else "poep"
-                    break
-                elif bits[1] in ("speld", "surpator", "linus"):
-                    which = bits[1]
-                    try:
-                        replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/markov?name=%s" % which, timeout=5).text
-                    except (requests.RequestException, ConnectionRefusedError) as e:
-                        replacement += "stijn wint markovcompetitie 2020 en nu krijgt hij elke week basilicumplantje dat direct sterft " if which == "speld" else "Actie tegen hondelulzonneklepwafelijzers in het OV"
-                    break
+            try:
+                replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/list?name=%s" % which,
+                                            timeout=5).text
+            except (requests.RequestException, ConnectionRefusedError) as e:
+                replacement += "stijn" if which == "lit" else "poep"
+            break
         elif character == "a":
             replacement += get_word_from_bank(file="banks/bijvnw.txt", pattern=pattern)
         elif character == "s":
@@ -146,6 +140,12 @@ def parse(buffer):
             break
         elif character == "m" and buffer[1] == ":":
             corpus = buffer.split(":")[1] + ".txt"
+            if corpus in ("speld", "surpator", "linus"):
+                try:
+                    replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/markov?name=%s" % corpus, timeout=5).text
+                except (requests.RequestException, ConnectionRefusedError) as e:
+                    replacement += "stijn wint markovcompetitie 2020 en nu krijgt hij elke week basilicumplantje dat direct sterft " if corpus == "speld" else "Actie tegen hondelulzonneklepwafelijzers in het OV"
+                break
             sentence = generate(corpus, pattern=pattern, max_attempts=250)
             if sentence is not None:
                  replacement = sentence

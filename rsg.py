@@ -139,13 +139,15 @@ def parse(buffer):
             replacement += str(choice(range(nmin, nmax)))
             break
         elif character == "m" and buffer[1] == ":":
-            corpus = buffer.split(":")[1] + ".txt"
+            corpus = buffer.split(":")[1]
             if corpus in ("speld", "surpator", "linus"):
                 try:
                     replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/markov?name=%s" % corpus, timeout=5).text
                 except (requests.RequestException, ConnectionRefusedError) as e:
                     replacement += "stijn wint markovcompetitie 2020 en nu krijgt hij elke week basilicumplantje dat direct sterft " if corpus == "speld" else "Actie tegen hondelulzonneklepwafelijzers in het OV"
                 break
+
+            corpus += ".txt"
             sentence = generate(corpus, pattern=pattern, max_attempts=250)
             if sentence is not None:
                  replacement = sentence

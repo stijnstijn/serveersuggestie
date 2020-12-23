@@ -8,8 +8,12 @@ import re
 
 pattern = re.sub(r"[^ \U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BFa-zA-Z0-9|\[\]()!@=/?*#$%\\^_&*.,;':\"-+<>-]", "", " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:]), flags=re.UNICODE)
 #pattern = " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:])
-if pattern != "zelfde":
+
+if not pattern:
+    Path("rsg.pattern").write_text(choice(Path("rsg.templates").read_text().split("\n")))
+elif pattern != "zelfde":
     Path("rsg.pattern").write_text(pattern)
+
 
 pattern = Path("rsg.pattern").read_text()
 

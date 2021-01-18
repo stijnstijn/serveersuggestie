@@ -10,7 +10,7 @@ pattern = re.sub(r"[^ \U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2
 #pattern = " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:])
 
 if not pattern:
-    Path("rsg.pattern").write_text(choice(Path("rsg.templates").read_text().split("\n")))
+    Path("rsg.pattern").write_text(choice([item for item in Path("rsg.templates").read_text().split("\n") if item.strip()]))
 elif pattern != "zelfde":
     Path("rsg.pattern").write_text(pattern)
 

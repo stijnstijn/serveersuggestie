@@ -1,6 +1,8 @@
 # start: 8 may 2020 23:16
 import requests
+import datetime
 import sqlite3
+import locale
 import sys
 import re
 import io
@@ -138,24 +140,103 @@ elif message == ".corona":
 
 elif message in (".vaccins", ".vaccin"):
 	# current Dutch vaccination progress
+	vaccines = 0
+	brands = set()
+	max_date = "0000-00-00"
+	recency = 0
+	per_date = {}
+
+	# get historical vaccine data from this random dude
+	# mostly useful for historical data, which coronadashboard doesn't have
 	raw_csv = requests.get("https://raw.githubusercontent.com/YorickBleijenberg/COVID_data_RIVM_Netherlands/master/vaccination/people.vaccinated.csv")
 	stream = io.StringIO(raw_csv.text)
 	reader = DictReader(stream)
-	vaccines = {}
+
 	for row in reader:
-		if row["vaccine"] not in vaccines:
-			vaccines[row["vaccine"]] = 0
-		vaccines[row["vaccine"]] = max(vaccines[row["vaccine"]], int(row["total_vaccinations"]))
+		row_brands = row["vaccine"].split(",")
+		for row_brand in row_brands:
+			brands.add(row_brand.strip())
+		if row["date"] not in per_date:
+			per_date[row["date"]] = 0
+		per_date[row["date"]] = max(per_date[row["date"]], int(row["total_vaccinations"]))
+		max_date = max(max_date, row["date"])
+		recency = max(recency, datetime.datetime.strptime(row["date"], "%Y-%m-%d").timestamp())
+		vaccines = max(vaccines, int(row["total_vaccinations"]))
 
-	bits = ["Er zijn tot nu toe %i vaccins van %s toegediend", "%i van %s", "en %i van %s"]
+	del per_date[max_date]
+
+	# get most recent data from coronadashboard, which may be more up to date than the csv
+	dashboard = requests.get("https://coronadashboard.rijksoverheid.nl/")
+	api_id = re.findall(r'<script src="/_next/static/([^/]+)/_ssgManifest.js" async="">', dashboard.text)[0]
+	api_response = requests.get("https://coronadashboard.rijksoverheid.nl/_next/data/%s/landelijk/vaccinaties.json" % api_id)
+	try:
+		api_json = api_response.json()
+		vaccines = max(vaccines, int(api_json["pageProps"]["text"]["vaccinaties"]["data"]["sidebar"]["last_value"]["total_vaccinated"]))
+		recency = max(recency, int(api_json["pageProps"]["text"]["vaccinaties"]["data"]["sidebar"]["last_value"]["date_unix"]))
+	except (KeyError, ValueError):
+		pass
+
+	# get population number for netherlands from CBS to calculate how much of 
+	# the population has been vaccinated
+	try:
+		cbs_date = re.sub(r'_0([0-9])', '_\\1', datetime.datetime.now().strftime("%Y_%m_%d"))
+		cbs_timestamp = int(datetime.datetime.now().timestamp())
+		cbs_url = "https://www.cbs.nl/-/media/cbs/Infographics/Bevolkingsteller/%s.json?_=%i" % (cbs_date, cbs_timestamp)
+		population = requests.get(cbs_url)
+		population = population.json()[0]
+		pct = float(vaccines) / float(population)
+		pct = round(pct * 100, 2)
+		populationbit = "; %s%% van de bevolking" % str(pct).replace(".", ",")
+	except Exception as e:
+		print(e)
+		populationbit = ""
+
+
+	# format most recent date for which we have data
+	old_locale = locale.setlocale(locale.LC_ALL)
+	try:
+		locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
+		updated_per = datetime.datetime.fromtimestamp(recency).strftime("%d %b")
+	finally:
+		locale.setlocale(locale.LC_ALL, old_locale)
+
+	# if we have data about a previous date, add the change since then
+	prevbit = ""
+	if per_date:
+		prev_date = sorted(per_date.keys(), reverse=True)[0]
+		locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
+		try:
+			prev_date_fmt = re.sub(r'0([0-9])', '\\1', datetime.datetime.strptime(prev_date, "%Y-%m-%d").strftime("%d %b"))
+		finally:
+			locale.setlocale(locale.LC_ALL, old_locale)
+		prev_value = per_date[prev_date]
+		difference = "{:,}".format(vaccines - prev_value).replace(",", ".")
+		prevbit = " (+%s sinds %s%s)" % (difference, prev_date_fmt, populationbit)
+
+
+	# make a list of all brands of vaccines that have been administered
 	message = []
-	for vaccine, amount in vaccines.items():
-		template = bits[0]
-		if len(bits) > 1:
-			bits = bits[1:]
-		message.append(template % (amount, vaccine))
+	brandbit = ""
+	brand_index = 0
+	for brand in brands:
+		brandbit += brand
+		if brand_index < len(brands) and brand_index == len(brands) - 2:
+			brandbit += " en "
+		elif brand_index < len(brands) - 1:
+			brandbit += ", "
 
-	slogans = ["%s. Wat anders?", "Ga nooit de deur uit zonder een shotje %s.", "%s geeft je vleugeltjes!", "%s. Omdat je het waard bent.", "%s - een beetje vreemd, maar wel lekker.", "Je voelt je lekkerder met %s.", "%s, da's pas lekker!", "Heerlijk, helder, %s.", "Je hebt vaccins, en je hebt %s.", "%s. Mannen weten waarom.", "Spuit %s, voel je zeker!", "Een beetje van jezelf, een beetje van %s.", "%s. Er is geen betere.", "%s - het vaccin van wakker Nederland.", "%s. Misschien wel het beste vaccin van Nederland.", "Onbegrijpelijk, %s. Onbegrijpelijk lekker!", "%s - steeds verrassend, altijd voordelig!", "%s - alleen als 'ie ijs- en ijskoud is!"]
-	message = ", ".join(message) + ". "
-	message += choice(slogans) % choice(list(vaccines.keys()))
+		brand_index += 1
+
+	# finalise message
+	vaccines = "{:,}".format(vaccines).replace(",", ".")
+	message = "Er zijn per %s %s vaccins van %s toegediend%s. " % (updated_per, vaccines, brandbit, prevbit)
+
+	# add a slogan for a random brand
+	slogans = ["%s. Wat anders?", "Ga nooit de deur uit zonder een shotje %s.", "%s geeft je vleugeltjes!", "%s. Omdat je het waard bent.", "%s - een beetje vreemd, maar wel lekker.", 
+		"Je voelt je lekkerder met %s.", "%s, da's pas lekker!", "Heerlijk, helder, %s.", "Je hebt vaccins, en je hebt %s.", "%s. Mannen weten waarom.", "Spuit %s, voel je zeker!", 
+		"Een beetje van jezelf, een beetje van %s.", "%s. Er is geen betere.", "%s - het vaccin van wakker Nederland.", "%s. Misschien wel het beste vaccin van Nederland.", 
+		"Onbegrijpelijk, %s. Onbegrijpelijk lekker!", "%s - steeds verrassend, altijd voordelig!", "%s - alleen als 'ie ijs- en ijskoud is!", "%s: ik ben toch niet gek?!"]
+
+	# done
+	message += choice(slogans) % choice(list(brands))
 	print("=msg" + message)

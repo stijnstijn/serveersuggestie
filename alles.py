@@ -185,10 +185,13 @@ elif message in (".vaccins", ".vaccin"):
 		population = requests.get(cbs_url)
 		population = population.json()[0]
 		pct = float(vaccines) / float(population)
-		pct = round(pct * 100, 2)
-		populationbit = "; %s%% van de bevolking" % str(pct).replace(".", ",")
+		populationbit = "; %s%% van de bevolking" % str(round(pct * 100, 2)).replace(".", ",")
+		if per_date:
+			prev_value = per_date[sorted(per_date.keys(), reverse=True)[0]]
+			prev_pct = float(prev_value) / float(population)
+			pct_increase = pct - prev_pct
+			populationbit += ", +%s%%" % str(round(pct_increase * 100, 2)).replace(".", ",")
 	except Exception as e:
-		print(e)
 		populationbit = ""
 
 

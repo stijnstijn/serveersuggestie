@@ -6,7 +6,9 @@ import requests
 import sys
 import re
 
-pattern = re.sub(r"[^ \U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BFa-zA-Z0-9|\[\]()!@=/?*#$%\\^_&*.,;':\"-+<>-]", "", " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:]), flags=re.UNICODE)
+forbidden = "^ \U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BFa-zA-Z0-9|\[\]()!@=/?*#$%\\^_&*.,;':\"-+<>-"
+forbidden = "/"
+pattern = re.sub(r"[" + forbidden + "]", "", " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:]), flags=re.UNICODE)
 #pattern = " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:])
 
 if not pattern:
@@ -14,7 +16,7 @@ if not pattern:
 elif pattern != "zelfde":
     Path("rsg.pattern").write_text(pattern)
 
-
+replacements = []
 pattern = Path("rsg.pattern").read_text()
 
 channel = sys.argv[1] if len(sys.argv) > 1 else ""
@@ -81,8 +83,9 @@ def parse(buffer):
             replacement += get_word_from_bank(file="banks/fietsmerken.txt", pattern=pattern)
         elif character in ("🚂", "🚄", "🚅", "🚞", "🚆", "🚇"):
             replacement += get_word_from_bank(file="banks/treinen.txt", pattern=pattern)
-        elif character in ("✈️"):
+        elif character in ("✈"):
             replacement += get_word_from_bank(file="banks/vliegtuigen.txt", pattern=pattern)
+            break
         elif character in ("🪐"):
             replacement += get_word_from_bank(file="banks/planeten.txt", pattern=pattern)
         elif character == "v":
@@ -124,6 +127,15 @@ def parse(buffer):
             replacement += get_word_from_bank(file="banks/plaatsen.txt", pattern=pattern)
         elif character in ("🏳", "🌍", "🌎", "🌏", "🗺"):
             replacement += get_word_from_bank(file="banks/landen.txt", pattern=pattern)
+        elif character == "<":
+            try:
+                index = int(buffer[1:])
+            except ValueError:
+                replacement = character + buffer
+                break
+            if index <= len(replacements):
+                replacement = replacements[index - 1]
+                break
         elif character == "#":
             nmin = None
             if len(buffer) > 1 and buffer[1] == ":":
@@ -170,6 +182,7 @@ def parse(buffer):
     if all_capitals:
         replacement = replacement.upper()
 
+    replacements.append(replacement)
     return replacement
 
 cursor = 0

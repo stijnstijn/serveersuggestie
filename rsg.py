@@ -129,7 +129,7 @@ def parse(buffer):
             replacement += get_word_from_bank(file="banks/landen.txt", pattern=pattern)
         elif character == "<":
             try:
-                index = int(buffer[1:])
+                index = max(1, int(buffer[1:]))
             except ValueError:
                 replacement = character + buffer
                 break

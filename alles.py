@@ -139,6 +139,8 @@ elif message == ".corona":
 	print("=msg" + sentence)
 
 elif message in (".vaccins", ".vaccin"):
+	db.execute("CREATE TABLE IF NOT EXISTS vaccines (date VARCHAR, amount INTEGER)")
+
 	# current Dutch vaccination progress
 	vaccines = 0
 	brands = set()
@@ -163,6 +165,17 @@ elif message in (".vaccins", ".vaccin"):
 		recency = max(recency, datetime.datetime.strptime(row["date"], "%Y-%m-%d").timestamp())
 		vaccines = max(vaccines, int(row["total_vaccinations"]))
 
+	# get historical data we previously collected ourselves
+	# overrides yorick
+	previous = db.execute("SELECT * FROM vaccines").fetchall()
+	for row in previous:
+		if row["date"] not in per_date:
+			per_date[row["date"]] = 0
+		per_date[row["date"]] = max(per_date[row["date"]], int(row["amount"]))
+		max_date = max(max_date, row["date"])
+		recency = max(recency, datetime.datetime.strptime(row["date"], "%Y-%m-%d").timestamp())
+		vaccines = max(vaccines, int(row["amount"]))
+
 	del per_date[max_date]
 
 	# get most recent data from coronadashboard, which may be more up to date than the csv
@@ -175,6 +188,15 @@ elif message in (".vaccins", ".vaccin"):
 		recency = max(recency, int(api_json["pageProps"]["text"]["vaccinaties"]["data"]["sidebar"]["last_value"]["date_unix"]))
 	except (KeyError, ValueError):
 		pass
+
+	date_sql = datetime.datetime.fromtimestamp(recency).strftime("%Y-%m-%d")
+	exists = db.execute("SELECT * FROM vaccines WHERE date = ?", (date_sql,)).fetchall()
+	if not exists:
+		db.execute("INSERT INTO vaccines (date, amount) VALUES (?, ?)", (date_sql, vaccines))
+	else:
+		db.execute("UPDATE vaccines SET amount = ? WHERE date = ?", (vaccines, date_sql))
+	dbconn.commit()
+
 
 	# get population number for netherlands from CBS to calculate how much of 
 	# the population has been vaccinated
@@ -199,7 +221,7 @@ elif message in (".vaccins", ".vaccin"):
 	old_locale = locale.setlocale(locale.LC_ALL)
 	try:
 		locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
-		updated_per = datetime.datetime.fromtimestamp(recency).strftime("%d %b")
+		updated_per = datetime.datetime.fromtimestamp(recency).strftime("%-d %b")
 	finally:
 		locale.setlocale(locale.LC_ALL, old_locale)
 
@@ -209,7 +231,7 @@ elif message in (".vaccins", ".vaccin"):
 		prev_date = sorted(per_date.keys(), reverse=True)[0]
 		locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
 		try:
-			prev_date_fmt = re.sub(r'0([0-9])', '\\1', datetime.datetime.strptime(prev_date, "%Y-%m-%d").strftime("%d %b"))
+			prev_date_fmt = re.sub(r'0([0-9])', '\\1', datetime.datetime.strptime(prev_date, "%Y-%m-%d").strftime("%-d %b"))
 		finally:
 			locale.setlocale(locale.LC_ALL, old_locale)
 		prev_value = per_date[prev_date]
@@ -232,7 +254,7 @@ elif message in (".vaccins", ".vaccin"):
 
 	# finalise message
 	vaccines = "{:,}".format(vaccines).replace(",", ".")
-	message = "Er zijn per %s %s vaccins van %s toegediend%s. " % (updated_per, vaccines, brandbit, prevbit)
+	message = "💉 Er zijn per %s %s vaccins van %s toegediend%s. " % (updated_per, vaccines, brandbit, prevbit)
 
 	# add a slogan for a random brand
 	slogans = ["%s. Wat anders?", "Ga nooit de deur uit zonder een shotje %s.", "%s geeft je vleugeltjes!", "%s. Omdat je het waard bent.", "%s - een beetje vreemd, maar wel lekker.", 

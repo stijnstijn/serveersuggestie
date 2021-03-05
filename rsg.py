@@ -123,6 +123,8 @@ def parse(buffer):
             replacement += get_word_from_bank(file="banks/scheldwoorden.txt", pattern=pattern)
         elif character == "p":
             replacement += get_word_from_bank(file="banks/beroemdheden.txt", pattern=pattern)
+        elif character == "b":
+            replacement += get_word_from_bank(file="banks/partijen.txt", pattern=pattern)
         elif character in ("l", "🏙", "🌃", "🌆", "🌇"):
             replacement += get_word_from_bank(file="banks/plaatsen.txt", pattern=pattern)
         elif character in ("🏳", "🌍", "🌎", "🌏", "🗺"):

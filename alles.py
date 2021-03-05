@@ -3,10 +3,14 @@ import requests
 import datetime
 import sqlite3
 import locale
+import json
 import sys
 import re
 import io
 
+import vaccins
+
+from collections import OrderedDict
 from csv import DictReader
 from random import shuffle, choice
 
@@ -139,110 +143,43 @@ elif message == ".corona":
 	print("=msg" + sentence)
 
 elif message in (".vaccins", ".vaccin"):
-	db.execute("CREATE TABLE IF NOT EXISTS vaccines (date VARCHAR, amount INTEGER)")
-
-	# current Dutch vaccination progress
-	vaccines = 0
-	brands = set()
-	max_date = "0000-00-00"
-	recency = 0
-	per_date = {}
-
-	# get historical vaccine data from this random dude
-	# mostly useful for historical data, which coronadashboard doesn't have
-	raw_csv = requests.get("https://raw.githubusercontent.com/YorickBleijenberg/COVID_data_RIVM_Netherlands/master/vaccination/people.vaccinated.csv")
-	stream = io.StringIO(raw_csv.text)
-	reader = DictReader(stream)
-
-	for row in reader:
-		row_brands = row["vaccine"].split(",")
-		for row_brand in row_brands:
-			brands.add(row_brand.strip())
-		if row["date"] not in per_date:
-			per_date[row["date"]] = 0
-		per_date[row["date"]] = max(per_date[row["date"]], int(row["total_vaccinations"]))
-		max_date = max(max_date, row["date"])
-		recency = max(recency, datetime.datetime.strptime(row["date"], "%Y-%m-%d").timestamp())
-		vaccines = max(vaccines, int(row["total_vaccinations"]))
-
-	# get historical data we previously collected ourselves
-	# overrides yorick
-	previous = db.execute("SELECT * FROM vaccines").fetchall()
-	for row in previous:
-		if row["date"] not in per_date:
-			per_date[row["date"]] = 0
-		per_date[row["date"]] = max(per_date[row["date"]], int(row["amount"]))
-		max_date = max(max_date, row["date"])
-		recency = max(recency, datetime.datetime.strptime(row["date"], "%Y-%m-%d").timestamp())
-		vaccines = max(vaccines, int(row["amount"]))
-
-	del per_date[max_date]
-
-	# get most recent data from coronadashboard, which may be more up to date than the csv
-	dashboard = requests.get("https://coronadashboard.rijksoverheid.nl/")
-	api_id = re.findall(r'<script src="/_next/static/([^/]+)/_ssgManifest.js" async="">', dashboard.text)[0]
-	api_response = requests.get("https://coronadashboard.rijksoverheid.nl/_next/data/%s/landelijk/vaccinaties.json" % api_id)
-	try:
-		api_json = api_response.json()
-		vaccines = max(vaccines, int(api_json["pageProps"]["text"]["vaccinaties"]["data"]["sidebar"]["last_value"]["total_vaccinated"]))
-		recency = max(recency, int(api_json["pageProps"]["text"]["vaccinaties"]["data"]["sidebar"]["last_value"]["date_unix"]))
-	except (KeyError, ValueError):
-		pass
-
-	date_sql = datetime.datetime.fromtimestamp(recency).strftime("%Y-%m-%d")
-	exists = db.execute("SELECT * FROM vaccines WHERE date = ?", (date_sql,)).fetchall()
-	if not exists:
-		db.execute("INSERT INTO vaccines (date, amount) VALUES (?, ?)", (date_sql, vaccines))
-	else:
-		db.execute("UPDATE vaccines SET amount = ? WHERE date = ?", (vaccines, date_sql))
-	dbconn.commit()
-
-
-	# get population number for netherlands from CBS to calculate how much of 
-	# the population has been vaccinated
-	try:
-		cbs_date = re.sub(r'_0([0-9])', '_\\1', datetime.datetime.now().strftime("%Y_%m_%d"))
-		cbs_timestamp = int(datetime.datetime.now().timestamp())
-		cbs_url = "https://www.cbs.nl/-/media/cbs/Infographics/Bevolkingsteller/%s.json?_=%i" % (cbs_date, cbs_timestamp)
-		population = requests.get(cbs_url)
-		population = population.json()[0]
-		pct = float(vaccines) / float(population)
-		populationbit = "; %s%% van de bevolking" % str(round(pct * 100, 2)).replace(".", ",")
-		if per_date:
-			prev_value = per_date[sorted(per_date.keys(), reverse=True)[0]]
-			prev_pct = float(prev_value) / float(population)
-			pct_increase = pct - prev_pct
-			populationbit += ", +%s%%" % str(round(pct_increase * 100, 2)).replace(".", ",")
-	except Exception as e:
-		populationbit = ""
-
-
-	# format most recent date for which we have data
-	old_locale = locale.setlocale(locale.LC_ALL)
-	try:
-		locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
-		updated_per = datetime.datetime.fromtimestamp(recency).strftime("%-d %b")
-	finally:
-		locale.setlocale(locale.LC_ALL, old_locale)
-
-	# if we have data about a previous date, add the change since then
-	prevbit = ""
-	if per_date:
-		prev_date = sorted(per_date.keys(), reverse=True)[0]
+	def day_local(date):
+		date = datetime.datetime.strptime(date, "%Y-%m-%d")
+		old_locale = locale.setlocale(locale.LC_ALL)
 		locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
 		try:
-			prev_date_fmt = re.sub(r'0([0-9])', '\\1', datetime.datetime.strptime(prev_date, "%Y-%m-%d").strftime("%-d %b"))
+			return date.strftime("%-d %b")
 		finally:
 			locale.setlocale(locale.LC_ALL, old_locale)
-		prev_value = per_date[prev_date]
-		difference = "{:,}".format(vaccines - prev_value).replace(",", ".")
-		prevbit = " (+%s sinds %s%s)" % (difference, prev_date_fmt, populationbit)
+
+	def num_local(num):
+		return "{:,}".format(num).replace(",", ".")
+
+	def flt_local(num):
+		return str(num).replace(".", ",")
+
+
+	unsorted_vaccines = vaccins.fetch_and_save()
+	vaccines = OrderedDict()
+	for d in sorted(unsorted_vaccines, reverse=True):
+		vaccines[d] = unsorted_vaccines[d]
+
+	latest_data = list(vaccines.values())[0]
+	updated_per = day_local(list(vaccines.keys())[0])
+
+	# if we have old data, include it too
+	prevbit = ""
+	if latest_data["pct_increase"]:
+		prev_date = list(vaccines.keys())[1]
+		prev_date_fmt = day_local(prev_date)
+		prevbit = "; +%s/+%s%% sinds %s" % (num_local(latest_data["doses_increase"]), flt_local(latest_data["pct_increase"]), prev_date_fmt)
 
 
 	# make a list of all brands of vaccines that have been administered
 	message = []
 	brandbit = ""
 	brand_index = 0
+	brands = [brand.replace("_", " ").title().replace("a Z", "aZ") for brand in json.loads(latest_data["doses_split"]).keys() if brand != "total"]
 	for brand in brands:
 		brandbit += brand
 		if brand_index < len(brands) and brand_index == len(brands) - 2:
@@ -253,8 +190,7 @@ elif message in (".vaccins", ".vaccin"):
 		brand_index += 1
 
 	# finalise message
-	vaccines = "{:,}".format(vaccines).replace(",", ".")
-	message = "💉 Er zijn per %s %s vaccins van %s toegediend%s. " % (updated_per, vaccines, brandbit, prevbit)
+	message = "💉 Er zijn per %s ~%s vaccins van %s toegediend (%s%% van de bevolking bij 1 dosis pp%s). " % (updated_per,  num_local(latest_data["doses_total"]), brandbit, flt_local(latest_data["pct"]), prevbit)
 
 	# add a slogan for a random brand
 	slogans = ["%s. Wat anders?", "Ga nooit de deur uit zonder een shotje %s.", "%s geeft je vleugeltjes!", "%s. Omdat je het waard bent.", "%s - een beetje vreemd, maar wel lekker.", 

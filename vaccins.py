@@ -37,7 +37,7 @@ def get_current_doses():
     api_url = "https://coronadashboard.rijksoverheid.nl/_next/data/%s/landelijk/vaccinaties.json" % api_id
     api_response = requests.get(api_url)
 
-    named_response = collections.namedtuple("Doses", ["time", "amount"])
+    named_response = collections.namedtuple("Doses", ["time", "amount", "moving_avg"])
 
     try:
         api_json = api_response.json()
@@ -46,7 +46,9 @@ def get_current_doses():
         updated_time = latest["date_of_insertion_unix"]
         vaccines = {"total": latest["estimated"], **{b: vaccines[b] for b in vaccines if "date" not in b}}
 
-        return named_response(updated_time, vaccines)
+        moving_avg = api_json["pageProps"]["data"]["vaccine_administered_rate_moving_average"]["last_value"]["doses_per_day"]
+
+        return named_response(updated_time, vaccines, moving_avg)
     except (KeyError, ValueError):
         return None
 
@@ -71,14 +73,14 @@ def fetch_and_save():
     current_population = get_population()
     current_date = datetime.datetime.fromtimestamp(current.time).strftime("%Y-%m-%d")
 
-    latest_record = db.execute("SELECT * FROM vaccines ORDER BY date DESC LIMIT 1").fetchone()
+    latest_record = db.execute("SELECT * FROM vaccines ORDER BY date DESC LIMIT 8").fetchone()
 
     if not latest_record or current_date > latest_record["date"]:
-        db.execute("INSERT INTO vaccines (date, population, doses_total, doses_split) VALUES (?, ?, ?, ?)",
-                   (current_date, current_population, current.amount["total"], json.dumps(current.amount)))
+        db.execute("INSERT INTO vaccines (date, population, doses_total, doses_split, moving_avg) VALUES (?, ?, ?, ?, ?)",
+                   (current_date, current_population, current.amount["total"], json.dumps(current.amount), current.moving_avg))
         db_connection.commit()
 
-    recent_data = list(db.execute("SELECT * FROM vaccines ORDER BY date ASC LIMIT 3").fetchall())
+    recent_data = list(db.execute("SELECT * FROM vaccines ORDER BY date ASC LIMIT 8").fetchall())
     result = {}
     previous = None
     for index, row in enumerate(recent_data):
@@ -87,9 +89,11 @@ def fetch_and_save():
             **row,
             "pct": pct,
             "pct_increase": round(pct - result[previous]["pct"], 1) if index > 0 else None,
-            "doses_increase": (row["doses_total"] - result[previous]["doses_total"]) if index > 0  else None
+            "doses_increase": (row["doses_total"] - result[previous]["doses_total"]) if index > 0  else None,
+            "moving_avg": row["moving_avg"],
+            "diff_avg": row["doses_total"] - row["moving_avg"]
         }
         previous = row["date"]
 
-    result = {date: result[date] for date in sorted(result, reverse=True)}
+    result = {date: result[date] for date in sorted(result, reverse=True)[:7]}
     return result

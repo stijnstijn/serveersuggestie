@@ -14,6 +14,12 @@ from collections import OrderedDict
 from csv import DictReader
 from random import shuffle, choice
 
+def sequence_to_ansi(sequence):
+	blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+	sequence = [int(round(value / max(sequence) * 7, 0)) for value in sequence]
+	return "".join([blocks[int(value)] for value in sequence])
+
+
 dbconn = sqlite3.connect("tnl.db")
 dbconn.row_factory = sqlite3.Row
 db = dbconn.cursor()
@@ -174,6 +180,10 @@ elif message in (".vaccins", ".vaccin"):
 		prev_date_fmt = day_local(prev_date)
 		prevbit = "; +%s/+%s%% sinds %s" % (num_local(latest_data["doses_increase"]), flt_local(latest_data["pct_increase"]), prev_date_fmt)
 
+	blocks = ""
+	if len(vaccines) > 4:
+		blocks = "; 7-daagse trend: " + sequence_to_ansi([vaccines[d]["doses_increase"] for d in vaccines])
+
 
 	# make a list of all brands of vaccines that have been administered
 	message = []
@@ -190,7 +200,8 @@ elif message in (".vaccins", ".vaccin"):
 		brand_index += 1
 
 	# finalise message
-	message = "💉 Er zijn per %s ~%s vaccins van %s toegediend (%s%% van de bevolking bij 1 dosis pp%s). " % (updated_per,  num_local(latest_data["doses_total"]), brandbit, flt_local(latest_data["pct"]), prevbit)
+	message = "💉 "
+	message += "Er zijn per %s ~%s vaccins van %s toegediend (%s%% van de bevolking bij 1 dosis pp%s%s). " % (updated_per,  num_local(latest_data["doses_total"]), brandbit, flt_local(latest_data["pct"]), prevbit, blocks)
 
 	# add a slogan for a random brand
 	slogans = ["%s. Wat anders?", "Ga nooit de deur uit zonder een shotje %s.", "%s geeft je vleugeltjes!", "%s. Omdat je het waard bent.", "%s - een beetje vreemd, maar wel lekker.", 

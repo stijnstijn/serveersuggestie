@@ -182,7 +182,7 @@ elif message in (".vaccins", ".vaccin"):
 
 	blocks = ""
 	if len(vaccines) > 4:
-		blocks = "; 7-daagse trend: " + sequence_to_ansi([vaccines[d]["doses_increase"] for d in vaccines])
+		blocks = "; 7-daagse trend: " + sequence_to_ansi([vaccines[d]["doses_increase"] for d in sorted(vaccines.keys(), reverse=False)])
 
 
 	# make a list of all brands of vaccines that have been administered

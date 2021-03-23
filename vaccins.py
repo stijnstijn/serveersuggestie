@@ -44,8 +44,7 @@ def get_current_doses():
         latest = api_json["pageProps"]["data"]["vaccine_administered_total"]["last_value"]
         vaccines = api_json["pageProps"]["data"]["vaccine_administered_estimate"]["last_value"]
         updated_time = latest["date_of_insertion_unix"]
-        vaccines = {"total": latest["estimated"], **{b: vaccines[b] for b in vaccines if "date" not in b}}
-
+        vaccines = {"total": latest["estimated"], **{b: vaccines[b] for b in vaccines if "date" not in b and b not in ("total",)}}
         moving_avg = api_json["pageProps"]["data"]["vaccine_administered_rate_moving_average"]["last_value"]["doses_per_day"]
 
         return named_response(updated_time, vaccines, moving_avg)
@@ -80,9 +79,11 @@ def fetch_and_save():
                    (current_date, current_population, current.amount["total"], json.dumps(current.amount), current.moving_avg))
         db_connection.commit()
 
-    recent_data = list(db.execute("SELECT * FROM vaccines ORDER BY date ASC LIMIT 8").fetchall())
+    recent_data = list(db.execute("SELECT * FROM vaccines ORDER BY date DESC LIMIT 8").fetchall())
+    recent_data.reverse()
     result = {}
     previous = None
+
     for index, row in enumerate(recent_data):
         pct = round(row["doses_total"] / row["population"] * 100, 1)
         result[row["date"]] = {

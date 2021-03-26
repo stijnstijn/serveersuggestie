@@ -112,7 +112,7 @@ def parse(buffer):
                 if bits[1] in ("lit", "shit"):
                     which = bits[1]
             try:
-                replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/list?name=%s" % which,
+                replacement += requests.get("https://api.tnl.social/list/%s" % which,
                                             timeout=5).text
             except (requests.RequestException, ConnectionRefusedError) as e:
                 replacement += "stijn" if which == "lit" else "poep"
@@ -160,7 +160,7 @@ def parse(buffer):
             corpus = buffer.split(":")[1]
             if corpus in ("speld", "surpator", "linus"):
                 try:
-                    replacement += requests.get("https://az-semyon-func.azurewebsites.net/api/markov?name=%s" % corpus, timeout=5).text
+                    replacement += requests.get("https://api.tnl.social/markov/%s" % corpus, timeout=5).text
                 except (requests.RequestException, ConnectionRefusedError) as e:
                     replacement += "stijn wint markovcompetitie 2020 en nu krijgt hij elke week basilicumplantje dat direct sterft " if corpus == "speld" else "Actie tegen hondelulzonneklepwafelijzers in het OV"
                 break

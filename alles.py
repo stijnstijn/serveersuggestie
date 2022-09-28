@@ -15,10 +15,24 @@ from csv import DictReader
 from random import shuffle, choice
 
 def sequence_to_ansi(sequence):
-	blocks = ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
-	sequence = [int(round(value / max(sequence) * 7, 0)) for value in sequence]
-	return "".join([blocks[int(value)] for value in sequence])
+	blocks = ["🤪", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
+	sequence = [int(round(value / max(sequence) * (len(blocks) - 2), 0)) for value in sequence]
+	return "".join([blocks[int(value) + 1 if value >= 0 else 0] for value in sequence])
 
+def day_local(date):
+	date = datetime.datetime.strptime(date, "%Y-%m-%d")
+	old_locale = locale.setlocale(locale.LC_ALL)
+	locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
+	try:
+		return date.strftime("%-d %b")
+	finally:
+		locale.setlocale(locale.LC_ALL, old_locale)
+
+def num_local(num):
+	return "{:,}".format(num).replace(",", ".")
+
+def flt_local(num):
+	return str(num).replace(".", ",")
 
 dbconn = sqlite3.connect("tnl.db")
 dbconn.row_factory = sqlite3.Row
@@ -84,7 +98,8 @@ elif message == ".snoeks":
 		else:
 			long.append(item)
 
-	teams = list(Path("teams").glob("*.txt"))
+	teams = list(Path("teams/vrouwen").glob("*.txt"))
+	teams = [Path("teams/mannen/Oranje.txt"), Path("teams/mannen/Polen.txt")]
 	shuffle(teams)
 	clubs = [line.strip() for line in open("banks/clubs.txt").readlines()]
 	shuffle(clubs)
@@ -148,67 +163,101 @@ elif message == ".corona":
 	sentence = "ik zat in de %s %s en mensen hielden zich %s aan de mondkapjesplicht, %s" % (transport, time, compliance, common)
 	print("=msg" + sentence)
 
-elif message in (".vaccins", ".vaccin"):
-	def day_local(date):
-		date = datetime.datetime.strptime(date, "%Y-%m-%d")
-		old_locale = locale.setlocale(locale.LC_ALL)
-		locale.setlocale(locale.LC_ALL, "nl_NL.utf8")
-		try:
-			return date.strftime("%-d %b")
-		finally:
-			locale.setlocale(locale.LC_ALL, old_locale)
+elif message == ".usd":
+	print("=msg(%s) USD (US Dollar) // $1.00 USD // 0%% change" % username)
 
-	def num_local(num):
-		return "{:,}".format(num).replace(",", ".")
+elif message == ".eur":
+	print("=msg(%s) EUR (Euro) // €1.00 EUR // 0%% change" % username)
 
-	def flt_local(num):
-		return str(num).replace(".", ",")
+elif message in (".rub", ".rbl"):
+	print("=msg(%s) RUB (Russian Ruble) // ₽1.00 RUB // 0%% change" % username)
+
+elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje"):
+	import openai
+
+	openai.api_key = Path("openapi.key").read_text().strip()
+	command = message.split(" ")[0]
+
+	if command == ".afmaken":
+		prompt = " ".join(message.split(" ")[1:])
+	elif command == ".maatregel":
+		prompt = "vandaag komt uit de maatregelencarrousel de volgende maatregel:"
+	elif command == ".drankje":
+		timestamp = datetime.datetime.now().strftime("%H:%M")
+		weekday = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"][datetime.datetime.today().weekday()]
+		prompt = "Om " + timestamp + " op " + weekday + " is het tijd voor het volgende drankje: "
+	else:
+		prompt = "vandaag komt uit de complotcarrousel het volgende complot:"
+
+	response = openai.Completion.create(
+		engine="davinci-instruct-beta",
+		temperature=0.75,
+		prompt=prompt,
+		max_tokens=125,
+		top_p=1.0,
+		frequency_penalty=0.5,
+		presence_penalty=0.0,
+		stop=["\n\n\n\n"]
+	)
+
+	response = response["choices"][0]["text"].strip().split("\n")[0]
+
+	if not response.strip():
+		print("=msg computer says no")
+	else:
+		print("=msg " + prompt.strip() + " " + response.strip())
 
 
-	unsorted_vaccines = vaccins.fetch_and_save()
-	vaccines = OrderedDict()
-	for d in sorted(unsorted_vaccines, reverse=True):
-		vaccines[d] = unsorted_vaccines[d]
+elif False and (message.split(" ")[0] == "serveersuggestie:"):
+	vraag = message.split(" ")
+	if len(vraag) <= 2:
+		exit()
 
-	latest_data = list(vaccines.values())[0]
-	updated_per = day_local(list(vaccines.keys())[0])
+	vraag = " ".join(vraag[1:])
+	import openai
+	openai.api_key = Path("openapi.key").read_text().strip()
+	with open("openai-chatlog.log") as infile:
+		z = [line for line in infile][-10:]
 
-	# if we have old data, include it too
-	prevbit = ""
-	if latest_data["pct_increase"]:
-		prev_date = list(vaccines.keys())[1]
-		prev_date_fmt = day_local(prev_date)
-		prevbit = "; +%s/+%s%% sinds %s" % (num_local(latest_data["doses_increase"]), flt_local(latest_data["pct_increase"]), prev_date_fmt)
+	prompt = "GESPREKSVERSLAG (FRAGMENT ZONDER HERHALINGEN) MET EEN POSITIEF INGESTELD PERSOON:\n"
+	prompt += "".join(z) 
+	prompt += "VRAAGSTELLER:" + vraag  + "\nIK:"
 
-	blocks = ""
-	if len(vaccines) > 4:
-		blocks = "; 7-daagse trend: " + sequence_to_ansi([vaccines[d]["doses_increase"] for d in sorted(vaccines.keys(), reverse=False)])
+	response = openai.Completion.create(
+		engine="davinci-instruct-beta",
+		temperature=0.75,
+		prompt=prompt,
+		max_tokens=125,
+		top_p=1.0,
+		frequency_penalty=2.0,
+		presence_penalty=0.5,
+		stop=["\n\n"]
+	)
 
+	response = response["choices"][0]["text"].strip().split("\n")[0]
 
-	# make a list of all brands of vaccines that have been administered
-	message = []
-	brandbit = ""
-	brand_index = 0
-	brands = [brand.replace("_", " ").title().replace("a Z", "aZ") for brand in json.loads(latest_data["doses_split"]).keys() if brand != "total"]
-	for brand in brands:
-		brandbit += brand
-		if brand_index < len(brands) and brand_index == len(brands) - 2:
-			brandbit += " en "
-		elif brand_index < len(brands) - 1:
-			brandbit += ", "
+	if response.strip():
+		answer = re.sub(r"\s+", " ", response.strip().replace("VRAAGSTELLER:", "").replace("IK:", "").replace("IEMAND ANDERS:", "").strip())
+		with open("openai-chatlog.log", "a") as outfile:
+			outfile.write("VRAAGSTELLER: " + vraag + "\n")
+			outfile.write("IEMAND ANDERS: " + answer + "\n")
 
-		brand_index += 1
+		print("=msg " + username + ": " + answer)
+elif False and (message[0] != "." and message.lower()[0:4] != "http" and not username.endswith("bot") and username != "serveersuggestie"):
+	if message.split(" ")[0].endswith(":"):
+		vraag = message.split(":")
+		if len(vraag) < 2:
+			exit()
 
-	# finalise message
-	message = "💉 "
-	message += "Er zijn per %s ~%s vaccins van %s toegediend (%s%% van de bevolking bij 1 dosis pp%s%s). " % (updated_per,  num_local(latest_data["doses_total"]), brandbit, flt_local(latest_data["pct"]), prevbit, blocks)
+		message = ":".join(vraag[1:])
 
-	# add a slogan for a random brand
-	slogans = ["%s. Wat anders?", "Ga nooit de deur uit zonder een shotje %s.", "%s geeft je vleugeltjes!", "%s. Omdat je het waard bent.", "%s - een beetje vreemd, maar wel lekker.", 
-		"Je voelt je lekkerder met %s.", "%s, da's pas lekker!", "Heerlijk, helder, %s.", "Je hebt vaccins, en je hebt %s.", "%s. Mannen weten waarom.", "Spuit %s, voel je zeker!", 
-		"Een beetje van jezelf, een beetje van %s.", "%s. Er is geen betere.", "%s - het vaccin van wakker Nederland.", "%s. Misschien wel het beste vaccin van Nederland.", 
-		"Onbegrijpelijk, %s. Onbegrijpelijk lekker!", "%s - steeds verrassend, altijd voordelig!", "%s - alleen als 'ie ijs- en ijskoud is!", "%s: ik ben toch niet gek?!"]
+	with open("openai-chatlog.log", "a") as outfile:
+		outfile.write("VRAAGSTELLER: " + message + "\n")
 
-	# done
-	message += choice(slogans) % choice(list(brands))
-	print("=msg" + message)
+	with open("openai-chatlog.log", "r") as infile:
+		lines = infile.readlines()
+
+	lines = lines[-10:]
+	with open("openai-chatlog.log", "w") as outfile:
+		for line in lines:
+			outfile.write(line.strip() + "\n")

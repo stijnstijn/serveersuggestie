@@ -9,7 +9,7 @@ import re
 forbidden = "^ \U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BFa-zA-Z0-9|\[\]()!@=/?*#$%\\^_&*.,;':\"-+<>-"
 forbidden = "/"
 pattern = re.sub(r"[" + forbidden + "]", "", " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:]), flags=re.UNICODE)
-#pattern = " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:])
+pattern = " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:])
 
 if not pattern:
     Path("rsg.pattern").write_text(choice([item for item in Path("rsg.templates").read_text().split("\n") if item.strip()]))
@@ -25,7 +25,7 @@ result = []
 userfile = Path("rsg.nicks")
 if userfile.exists():
     with userfile.open() as userstream:
-        users = [user.strip() for user in userstream.read().split("\n")]
+        users = [user.strip() for user in userstream.read().split("\n") if user.strip()]
 else:
     users = ["gonzobot"]
 
@@ -58,7 +58,7 @@ def parse(buffer):
     pattern = None
     if regex:
        buffer = buffer[:len(buffer)-len(regex.group(0))]
-       pattern = re.escape(regex.group(1)).replace("\\*", "*").replace("\\?", "?").replace("?", ".").replace("*", ".*")
+       pattern = "^" + re.escape(regex.group(1)).replace("\\*", "*").replace("\\?", "?").replace("?", ".").replace("*", ".*")+ "$"
 
     if buffer[-1] == "^":
         capitalise = True
@@ -79,6 +79,8 @@ def parse(buffer):
             replacement += get_word_from_bank(bank=users, pattern=pattern)
         elif character in ("🚖", "🚗", "🚘", "🚙"):
             replacement += get_word_from_bank(file="banks/automerken.txt", pattern=pattern)
+        elif character == "🍕":
+            replacement += "Pizza " + get_word_from_bank(file="banks/pizza.txt", pattern=pattern)
         elif character in ("🚲"):
             replacement += get_word_from_bank(file="banks/fietsmerken.txt", pattern=pattern)
         elif character in ("🚂", "🚄", "🚅", "🚞", "🚆", "🚇"):
@@ -86,6 +88,9 @@ def parse(buffer):
         elif character in ("✈"):
             replacement += get_word_from_bank(file="banks/vliegtuigen.txt", pattern=pattern)
             break
+#        elif character in ("🤖"):
+#            replacement += "%%OPENAI_INSERT%%"
+#            break
         elif character in ("🪐"):
             replacement += get_word_from_bank(file="banks/planeten.txt", pattern=pattern)
         elif character == "v":
@@ -93,19 +98,18 @@ def parse(buffer):
         elif character == "c":
             replacement += get_word_from_bank(bank=["b","c","d","f","g","h","j","k","l","m","n","p","q","r","s","t","v","w","x","z"], pattern=pattern)
         elif character == "n":
+            plural = len(buffer) > 1 and buffer[1] == "s"
             noun = get_word_from_bank(file="banks/zelfstnw.txt", pattern=pattern).split("|")
-            if len(noun) == 1:
+            if len(noun) == 1 or not plural:
                  replacement += noun[0]
-            elif len(noun) == 2:
-                 replacement += noun[0]
-            else:
-                 replacement += noun[0] + noun[1]
+            elif len(noun) == 2 and plural:
+                 replacement += noun[1]
         elif character == "e":
             replacement += get_word_from_bank(file="banks/bedrijven.txt", pattern=pattern)
         elif character == "g":
             replacement += get_word_from_bank(file="banks/genres.txt", pattern=pattern)
         elif character == "i":
-            which = "lit"
+            which = choice(("lit", "shit"))
             if len(buffer) > 1 and buffer[1] == ":":
                 bits = buffer.split(":")
                 bits[1] = bits[1].replace("list", "")
@@ -222,4 +226,26 @@ while True:
 
     cursor += 1
 
-print((" " + "".join(result))[0:500])
+result = "".join(result)
+if "%%OPENAI_INSERT%%" in result:
+    import openai
+    openai.api_key = Path("openapi.key").read_text().strip()
+    bits = result.split("%%OPENAI_INSERT%%")
+    prompt = bits[0]
+    suffix = "🤖".join(bits[1:])
+
+    response = openai.Completion.create(
+        engine="text-davinci-002",
+        temperature=0.75,
+        prompt=prompt,
+        suffix=suffix,
+        max_tokens=128,
+        top_p=1.0,
+        frequency_penalty=0.5,
+        presence_penalty=0.0
+    )
+
+    response = response["choices"][0]["text"].strip().split("\n")[0]
+    result = prompt + response + suffix
+
+print((" " + result)[0:500])

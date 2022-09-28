@@ -7,8 +7,10 @@ Wollongong Wolves
 Vancouver Whitecaps
 Dinamo București
 Dinamo-Auto Tiraspol
+<<<<<<< HEAD
 Coalville Town
 Rushall Olympic
 Swindon Supermarine
 Kempston Rovers
 Qarabağ Futbol
+Botswana Meat Commission F.C.

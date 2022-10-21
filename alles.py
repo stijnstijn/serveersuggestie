@@ -172,6 +172,15 @@ elif message == ".eur":
 elif message in (".rub", ".rbl"):
 	print("=msg(%s) RUB (Russian Ruble) // ₽1.00 RUB // 0%% change" % username)
 
+elif message == ".scooter":
+	message = "🎶 "
+	phrases = Path("banks/scooter.txt").read_text().split("\n")
+	shuffle(phrases)
+	while len(message) < 64:
+		message += phrases.pop() + " 🛵 "
+	message += phrases.pop() + " 🎶"
+	print("=msg" + message)
+
 elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje"):
 	import openai
 

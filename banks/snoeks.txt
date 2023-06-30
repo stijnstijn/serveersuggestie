@@ -191,3 +191,5 @@ broer is verdienstelijk korfballer
 links [speler]
 [speler] heeft nog niets te doen gehad
 schreeuwt iets in... een vreemde taal
+geboren in hetzelfde ziekenhuis als... [speler]
+wat kan [team] nog

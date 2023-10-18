@@ -12,8 +12,6 @@ import sys
 import re
 import io
 
-import vaccins
-
 from collections import OrderedDict
 from csv import DictReader
 from random import shuffle, choice

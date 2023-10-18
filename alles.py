@@ -1,8 +1,12 @@
 # start: 8 may 2020 23:16
+import subprocess
 import requests
 import datetime
+import irccodes
 import sqlite3
 import locale
+import shlex
+import time
 import json
 import sys
 import re
@@ -13,6 +17,7 @@ import vaccins
 from collections import OrderedDict
 from csv import DictReader
 from random import shuffle, choice
+from helpers import timify_long, format_tweet
 
 def sequence_to_ansi(sequence):
 	blocks = ["🤪", "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█"]
@@ -33,6 +38,9 @@ def num_local(num):
 
 def flt_local(num):
 	return str(num).replace(".", ",")
+
+def printp(s, *args, **kwargs):
+	print(s, *args, **kwargs)
 
 dbconn = sqlite3.connect("tnl.db")
 dbconn.row_factory = sqlite3.Row
@@ -80,12 +88,12 @@ if message.split(" ")[0] == ".glitterplaatje":
 	urls = [line.strip() for line in open("banks/all-picmix.txt").readlines()]
 	shuffle(urls)
 	url = urls[0]
-	print("=msg", end="")
+	printp("=msg", end="")
 	if len(bits) > 1:
 		name = re.sub("[^a-zA-Z0-9!@#$%&&*()_+-= ]", "", " ".join(bits[1:]))
-		print("een glitterplaatje voor %s: %s" % (name, url))
+		printp("een glitterplaatje voor %s: %s" % (name, url))
 	else:
-		print("een glitterplaatje voor jou: %s" % url)
+		printp("een glitterplaatje voor jou: %s" % url)
 
 elif message == ".snoeks":
 	# an emulation of Frank Snoeks' football commentary
@@ -99,7 +107,7 @@ elif message == ".snoeks":
 			long.append(item)
 
 	teams = list(Path("teams/vrouwen").glob("*.txt"))
-	teams = [Path("teams/mannen/Oranje.txt"), Path("teams/mannen/Polen.txt")]
+	teams = [Path("teams/mannen/Engeland.txt"), Path("teams/mannen/Italië.txt")]
 	shuffle(teams)
 	clubs = [line.strip() for line in open("banks/clubs.txt").readlines()]
 	shuffle(clubs)
@@ -142,7 +150,7 @@ elif message == ".snoeks":
 
 		buffer += bit + "... "
 
-	print("=msg" + buffer)
+	printp("=msg" + buffer)
 
 elif message == ".corona":
 	# generic expression of worry/hope about how NL is coping with corona
@@ -161,16 +169,16 @@ elif message == ".corona":
 	common = common[common_index]
 
 	sentence = "ik zat in de %s %s en mensen hielden zich %s aan de mondkapjesplicht, %s" % (transport, time, compliance, common)
-	print("=msg" + sentence)
+	printp("=msg" + sentence)
 
 elif message == ".usd":
-	print("=msg(%s) USD (US Dollar) // $1.00 USD // 0%% change" % username)
+	printp("=msg(%s) USD (US Dollar) // $1.00 USD // 0%% change" % username)
 
 elif message == ".eur":
-	print("=msg(%s) EUR (Euro) // €1.00 EUR // 0%% change" % username)
+	printp("=msg(%s) EUR (Euro) // €1.00 EUR // 0%% change" % username)
 
 elif message in (".rub", ".rbl"):
-	print("=msg(%s) RUB (Russian Ruble) // ₽1.00 RUB // 0%% change" % username)
+	printp("=msg(%s) RUB (Russian Ruble) // ₽1.00 RUB // 0%% change" % username)
 
 elif message == ".scooter":
 	message = "🎶 "
@@ -179,21 +187,29 @@ elif message == ".scooter":
 	while len(message) < 64:
 		message += phrases.pop() + " 🛵 "
 	message += phrases.pop() + " 🎶"
-	print("=msg" + message)
+	printp("=msg" + message)
 
-elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje"):
+elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje", ".wietplan", ".frietplan"):
 	import openai
 
 	openai.api_key = Path("openapi.key").read_text().strip()
 	command = message.split(" ")[0]
 
+	preprompt = "" 
 	if command == ".afmaken":
 		prompt = " ".join(message.split(" ")[1:])
 	elif command == ".maatregel":
 		prompt = "vandaag komt uit de maatregelencarrousel de volgende maatregel:"
+	elif command == ".wietplan":
+		preprompt = "Dit is een verhaal over een wietplan in een parallel universum waarin wiet meer als LSD werkt en een magische en hallucinerende werking heeft. "
+		prompt = "Het nieuwe wietplan is bekend gemaakt. Dit houdt in dat"
+	elif command == ".frietplan":
+		preprompt = "Er is al lang sprake van een frietplan. Een modern, vernieuwend, verrassend algemeen beleid rondom friet. Friet krijgt hierin een zeer belangrijke maatschappelijke rol. "
+		prompt = "Het nieuwe frietplan is bekend gemaakt. Dit houdt in dat"
 	elif command == ".drankje":
 		timestamp = datetime.datetime.now().strftime("%H:%M")
 		weekday = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"][datetime.datetime.today().weekday()]
+		preprompt = "Voor elk moment is wel een geschikt drankje te bedenken. Soms ingewikkeld, soms met bekende ingrediënten. Geef nu een vervolg op de volgende zin bestaande uit een drankje en korte uitleg:  "
 		prompt = "Om " + timestamp + " op " + weekday + " is het tijd voor het volgende drankje: "
 	else:
 		prompt = "vandaag komt uit de complotcarrousel het volgende complot:"
@@ -201,7 +217,7 @@ elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje"):
 	response = openai.Completion.create(
 		engine="davinci-instruct-beta",
 		temperature=0.75,
-		prompt=prompt,
+		prompt=preprompt + " " + prompt,
 		max_tokens=125,
 		top_p=1.0,
 		frequency_penalty=0.5,
@@ -212,9 +228,9 @@ elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje"):
 	response = response["choices"][0]["text"].strip().split("\n")[0]
 
 	if not response.strip():
-		print("=msg computer says no")
+		printp("=msg computer says no")
 	else:
-		print("=msg " + prompt.strip() + " " + response.strip())
+		printp("=msg " + prompt.strip() + " " + response.strip())
 
 
 elif False and (message.split(" ")[0] == "serveersuggestie:"):
@@ -251,7 +267,7 @@ elif False and (message.split(" ")[0] == "serveersuggestie:"):
 			outfile.write("VRAAGSTELLER: " + vraag + "\n")
 			outfile.write("IEMAND ANDERS: " + answer + "\n")
 
-		print("=msg " + username + ": " + answer)
+		printp("=msg " + username + ": " + answer)
 elif False and (message[0] != "." and message.lower()[0:4] != "http" and not username.endswith("bot") and username != "serveersuggestie"):
 	if message.split(" ")[0].endswith(":"):
 		vraag = message.split(":")

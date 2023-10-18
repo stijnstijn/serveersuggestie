@@ -2,8 +2,6 @@ sam
 anne
 femme
 jip
-guus
-lou
 stijn
 dominique
 max
@@ -11,3 +9,11 @@ jamie
 chris
 alex
 jules
+floor
+puck
+robin
+luca
+jules
+bo
+nicky
+wil

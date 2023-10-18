@@ -2,24 +2,33 @@ from pathlib import Path
 from random import choice
 from markov import generate
 
+import sys
 import requests
 import sys
 import re
 
+allow_robots = True
 forbidden = "^ \U0001F300-\U0001F64F\U0001F680-\U0001F6FF\u2600-\u26FF\u2700-\u27BFa-zA-Z0-9|\[\]()!@=/?*#$%\\^_&*.,;':\"-+<>-"
 forbidden = "/"
 pattern = re.sub(r"[" + forbidden + "]", "", " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:]), flags=re.UNICODE)
 pattern = " ".join(Path("rsg.temp").read_text().strip().split(" ")[1:])
 
-if not pattern:
-    Path("rsg.pattern").write_text(choice([item for item in Path("rsg.templates").read_text().split("\n") if item.strip()]))
-elif pattern != "zelfde":
+if not pattern or re.match(r"^[0-9]+$", pattern):
+    allow_robots = True
+    templates = [item for item in Path("rsg.templates").read_text().split("\n") if item.strip()]
+    if re.match(r"^[0-9]+$", pattern) and int(pattern) <= len(templates) and int(pattern) > 0:
+        pattern = templates[int(pattern) - 1]
+    else:
+        pattern = choice(templates)
+
+if pattern != "zelfde":
     Path("rsg.pattern").write_text(pattern)
 
 replacements = []
 pattern = Path("rsg.pattern").read_text()
 
 channel = sys.argv[1] if len(sys.argv) > 1 else ""
+pattern = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else pattern
 result = []
 
 userfile = Path("rsg.nicks")
@@ -88,13 +97,26 @@ def parse(buffer):
         elif character in ("✈"):
             replacement += get_word_from_bank(file="banks/vliegtuigen.txt", pattern=pattern)
             break
-#        elif character in ("🤖"):
-#            replacement += "%%OPENAI_INSERT%%"
-#            break
+        elif character in ("🤖"):
+            if allow_robots:
+                replacement += "%%OPENAI_INSERT%%"
+            break
         elif character in ("🪐"):
             replacement += get_word_from_bank(file="banks/planeten.txt", pattern=pattern)
+        elif character == "v" and len(buffer) > 1 and buffer[1] == "n":
+            which = choice(("m", "v", "x"))
+            if len(buffer) > 2 and buffer[2] == ":":
+                bits = buffer.split(":")
+                if bits[1] in ("v", "m", "x"):
+                    which = bits[1]
+            replacement += get_word_from_bank(file=f"banks/voornamen-{which}.txt", pattern=pattern)
+            break
+        elif character == "a" and len(buffer) > 1 and buffer[1] == "n":
+            replacement += get_word_from_bank(file="banks/achternamen.txt", pattern=pattern)
+            break
         elif character == "v":
             replacement += get_word_from_bank(bank=["a","e","i","o","u","y"], pattern=pattern)
+            break
         elif character == "c":
             replacement += get_word_from_bank(bank=["b","c","d","f","g","h","j","k","l","m","n","p","q","r","s","t","v","w","x","z"], pattern=pattern)
         elif character == "n":
@@ -123,6 +145,8 @@ def parse(buffer):
             break
         elif character == "a":
             replacement += get_word_from_bank(file="banks/bijvnw.txt", pattern=pattern)
+        elif character == "f":
+            replacement += get_word_from_bank(file="banks/apps.txt", pattern=pattern)
         elif character == "s":
             replacement += get_word_from_bank(file="banks/scheldwoorden.txt", pattern=pattern)
         elif character == "p":

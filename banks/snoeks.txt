@@ -59,7 +59,7 @@ opstopping... bij de eerste paal
 [speler]... laat zich wegzetten... door [speler]
 geen wissels nog
 speelt naar nummer [nummer]... toevallig ook de leeftijd van
-de bal gaat naar [speler] maar bereikt bestemming niet
+bal gaat naar [speler] maar bereikt bestemming niet
 de plaaggeest van [speler]... en van [team]
 waar [speler] de bal volgt... volgt [speler] nu de bal
 kaapt de bal nu van [speler]
@@ -193,3 +193,10 @@ links [speler]
 schreeuwt iets in... een vreemde taal
 geboren in hetzelfde ziekenhuis als... [speler]
 wat kan [team] nog
+is pas getrouwd
+[speler] gaat zitten... en daarna liggen
+dat lukt met veel pijn en moeite
+de slotfase... die is ingegaan
+tijd voor [speler]
+blijft binnen
+[speler] met de poging

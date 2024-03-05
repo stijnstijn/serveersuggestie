@@ -94,6 +94,8 @@ def parse(buffer):
             replacement += get_word_from_bank(file="banks/fietsmerken.txt", pattern=pattern)
         elif character in ("🚂", "🚄", "🚅", "🚞", "🚆", "🚇"):
             replacement += get_word_from_bank(file="banks/treinen.txt", pattern=pattern)
+        elif character in ("🌊",):
+            replacement += get_word_from_bank(file="banks/rivieren.txt", pattern=pattern)
         elif character in ("✈"):
             replacement += get_word_from_bank(file="banks/vliegtuigen.txt", pattern=pattern)
             break
@@ -259,8 +261,8 @@ if "%%OPENAI_INSERT%%" in result:
     suffix = "🤖".join(bits[1:])
 
     response = openai.Completion.create(
-        engine="text-davinci-002",
-        temperature=0.75,
+        engine="gpt-3.5-turbo-instruct",
+        temperature=0.85,
         prompt=prompt,
         suffix=suffix,
         max_tokens=128,

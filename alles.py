@@ -105,7 +105,7 @@ elif message == ".snoeks":
 			long.append(item)
 
 	teams = list(Path("teams/vrouwen").glob("*.txt"))
-	teams = [Path("teams/mannen/Engeland.txt"), Path("teams/mannen/Italië.txt")]
+	teams = [Path("teams/vrouwen/Oranje.txt"), Path("teams/vrouwen/België.txt")]
 	shuffle(teams)
 	clubs = [line.strip() for line in open("banks/clubs.txt").readlines()]
 	shuffle(clubs)
@@ -150,25 +150,6 @@ elif message == ".snoeks":
 
 	printp("=msg" + buffer)
 
-elif message == ".corona":
-	# generic expression of worry/hope about how NL is coping with corona
-	transport = ["trein", "tram", "trolleybus", "watertaxi", "bus", "buurtbus", "stationswachtruimte", "stadsbus"]
-	time = ["in de spits", "net voor de spits", "net na de spits", "'s ochtends", "rond de middag", "rond de avond", "vroeg in de ochtend"]
-	compliance = ["minder goed dan ik had gehoopt", "totaal niet", "matig", "best slecht", "zeer matig", "redelijk", "best goed", "beter dan ik had gehoopt", "echt heel goed", "uitmuntend"]
-	common = ["zo komt het toch wel dichtbij ineens", "zo wordt het niks natuurlijk", "'t is wat allemaal", "ugh", "misschien wordt het nog wel wat", "misschien is er nog hoop", "goed om te zien", "geeft toch een goed gevoel"]
-
-	transport = choice(transport)
-	time = choice(time)
-	compliance_index = choice(range(0,len(compliance)))
-	common_index_start = int(len(common)/2) if compliance_index >= (len(compliance) / 2) else 0
-	common_index_end = int(len(common)/2) if common_index_start == 0 else len(common)
-	common_index = choice(range(common_index_start, common_index_end))
-	compliance = compliance[compliance_index]
-	common = common[common_index]
-
-	sentence = "ik zat in de %s %s en mensen hielden zich %s aan de mondkapjesplicht, %s" % (transport, time, compliance, common)
-	printp("=msg" + sentence)
-
 elif message == ".usd":
 	printp("=msg(%s) USD (US Dollar) // $1.00 USD // 0%% change" % username)
 
@@ -187,7 +168,7 @@ elif message == ".scooter":
 	message += phrases.pop() + " 🎶"
 	printp("=msg" + message)
 
-elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje", ".wietplan", ".frietplan"):
+elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje", ".wietplan", ".frietplan", ".bijbaan"):
 	import openai
 
 	openai.api_key = Path("openapi.key").read_text().strip()
@@ -196,6 +177,9 @@ elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje", ".wietplan"
 	preprompt = "" 
 	if command == ".afmaken":
 		prompt = " ".join(message.split(" ")[1:])
+	elif command == ".bijbaan":
+		preprompt = "hierna volgt een bijbaan die een beetje vreemd is, maar wel leuk, en waar je niet zo snel aan zou denken. hij is goed naast je studie te doen."
+		prompt = "vandaag komt uit de bijbanencarrousel de volgende bijbaan:"
 	elif command == ".maatregel":
 		prompt = "vandaag komt uit de maatregelencarrousel de volgende maatregel:"
 	elif command == ".wietplan":
@@ -207,13 +191,14 @@ elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje", ".wietplan"
 	elif command == ".drankje":
 		timestamp = datetime.datetime.now().strftime("%H:%M")
 		weekday = ["maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag", "zondag"][datetime.datetime.today().weekday()]
-		preprompt = "Voor elk moment is wel een geschikt drankje te bedenken. Soms ingewikkeld, soms met bekende ingrediënten. Geef nu een vervolg op de volgende zin bestaande uit een drankje en korte uitleg:  "
+		preprompt = "Voor elk moment is wel een geschikt drankje te bedenken. Geef nu een vervolg op de volgende zin bestaande uit een minder gangbaar drankje en korte uitleg van een paar woorden:  "
 		prompt = "Om " + timestamp + " op " + weekday + " is het tijd voor het volgende drankje: "
 	else:
+		preprompt = "we hebben het hier over complotten die zeer vreemd en esoterisch zijn en weinig betrekking hebben op de actualiteit. weinig mensen kennen deze, zeker niet in de westerse wereld. ik leg uit waarom ze interessant zijn, "
 		prompt = "vandaag komt uit de complotcarrousel het volgende complot:"
 
 	response = openai.Completion.create(
-		engine="davinci-instruct-beta",
+		engine="gpt-3.5-turbo-instruct",
 		temperature=0.75,
 		prompt=preprompt + " " + prompt,
 		max_tokens=125,
@@ -229,58 +214,3 @@ elif message.split(" ")[0] in (".maatregel", ".complot", ".drankje", ".wietplan"
 		printp("=msg computer says no")
 	else:
 		printp("=msg " + prompt.strip() + " " + response.strip())
-
-
-elif False and (message.split(" ")[0] == "serveersuggestie:"):
-	vraag = message.split(" ")
-	if len(vraag) <= 2:
-		exit()
-
-	vraag = " ".join(vraag[1:])
-	import openai
-	openai.api_key = Path("openapi.key").read_text().strip()
-	with open("openai-chatlog.log") as infile:
-		z = [line for line in infile][-10:]
-
-	prompt = "GESPREKSVERSLAG (FRAGMENT ZONDER HERHALINGEN) MET EEN POSITIEF INGESTELD PERSOON:\n"
-	prompt += "".join(z) 
-	prompt += "VRAAGSTELLER:" + vraag  + "\nIK:"
-
-	response = openai.Completion.create(
-		engine="davinci-instruct-beta",
-		temperature=0.75,
-		prompt=prompt,
-		max_tokens=125,
-		top_p=1.0,
-		frequency_penalty=2.0,
-		presence_penalty=0.5,
-		stop=["\n\n"]
-	)
-
-	response = response["choices"][0]["text"].strip().split("\n")[0]
-
-	if response.strip():
-		answer = re.sub(r"\s+", " ", response.strip().replace("VRAAGSTELLER:", "").replace("IK:", "").replace("IEMAND ANDERS:", "").strip())
-		with open("openai-chatlog.log", "a") as outfile:
-			outfile.write("VRAAGSTELLER: " + vraag + "\n")
-			outfile.write("IEMAND ANDERS: " + answer + "\n")
-
-		printp("=msg " + username + ": " + answer)
-elif False and (message[0] != "." and message.lower()[0:4] != "http" and not username.endswith("bot") and username != "serveersuggestie"):
-	if message.split(" ")[0].endswith(":"):
-		vraag = message.split(":")
-		if len(vraag) < 2:
-			exit()
-
-		message = ":".join(vraag[1:])
-
-	with open("openai-chatlog.log", "a") as outfile:
-		outfile.write("VRAAGSTELLER: " + message + "\n")
-
-	with open("openai-chatlog.log", "r") as infile:
-		lines = infile.readlines()
-
-	lines = lines[-10:]
-	with open("openai-chatlog.log", "w") as outfile:
-		for line in lines:
-			outfile.write(line.strip() + "\n")
